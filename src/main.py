@@ -3,7 +3,6 @@ import os
 import numpy as np
 from sklearn.metrics import accuracy_score
 
-# Ensures the 'src' directory is in the system path to avoid ImportErrors
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import config
@@ -14,13 +13,13 @@ from visualizer import ResultVisualizer
 
 def run_pipeline():
     # 1. Load and Preprocess Data
-    # -----------------------------------------
+  
     loader = ECGDataLoader().load_and_process()
     builder = ModelBuilder()
     research_data = {}
 
     # 2. Autoencoder (AE) Pipeline
-    # -----------------------------------------
+   
     log("Running AE Pipeline...")
     ae, encoder_ae = builder.build_ae()
     # verbose=2 prints one line per epoch
@@ -33,7 +32,7 @@ def run_pipeline():
     z_ae_test = encoder_ae.predict(loader.X_test_flat)
 
     # 3. Variational Autoencoder (VAE) Pipeline
-    # -----------------------------------------
+    
     log("Running VAE Pipeline...")
     vae, encoder_vae = builder.build_vae()
     vae.fit(loader.X_train_flat, 
@@ -45,7 +44,7 @@ def run_pipeline():
     z_vae_test, _, _ = encoder_vae.predict(loader.X_test_flat)
 
     # 4. Classification & Evaluation
-    # -----------------------------------------
+
     # We compare three different inputs for the CNN classifier
     pipelines = [
         ("RAW ECG", loader.X_train_cnn, loader.X_test_cnn, config.MAX_SAMPLES),
@@ -71,7 +70,6 @@ def run_pipeline():
         }
 
     # 5. Generate Research Figures
-    # -----------------------------------------
     log("Generating Research-Grade Visualizations...")
     viz = ResultVisualizer(research_data, loader.y_test)
     

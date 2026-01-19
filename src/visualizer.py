@@ -27,11 +27,11 @@ class ResultVisualizer:
         
         for bar in bars:
             yval = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f"{yval:.4f}", ha='center', fontweight='bold')
+            plt.text(bar.get_x() + bar.get_width()/2, yval + 0.02, f"{yval:.4f}", 
+                     ha='center', fontweight='bold')
         
         plt.tight_layout()
-        plt.savefig("accuracy_comparison.png", dpi=300)
-        plt.show()
+        plt.show() 
 
     def plot_confusion_matrices(self):
         fig, axes = plt.subplots(1, 3, figsize=(18, 5))
@@ -43,8 +43,7 @@ class ResultVisualizer:
             axes[i].set_ylabel("Actual")
         
         plt.tight_layout()
-        plt.savefig("confusion_matrices.png", dpi=300)
-        plt.show()
+        plt.show()  
 
     def plot_roc_curves(self):
         plt.figure(figsize=(8, 6))
@@ -62,16 +61,13 @@ class ResultVisualizer:
         plt.ylabel('True Positive Rate')
         plt.title('Receiver Operating Characteristic (ROC)')
         plt.legend(loc="lower right")
-        plt.savefig("roc_curves.png", dpi=300)
-        plt.show()
+        plt.show()  
 
     def plot_latent_tsne(self, latent_features, labels, title="t-SNE"):
-        # Check if latent_features contains NaNs
         if np.isnan(latent_features).any():
             print(f"[WARNING] Skipping {title} because data contains NaNs.")
             return
 
-        from sklearn.manifold import TSNE
         plt.figure(figsize=(10, 8))
         tsne = TSNE(n_components=2, random_state=42)
         projections = tsne.fit_transform(latent_features)
@@ -79,8 +75,7 @@ class ResultVisualizer:
         plt.scatter(projections[:, 0], projections[:, 1], c=labels, cmap='coolwarm', alpha=0.6)
         plt.colorbar(label='0: Normal, 1: MI')
         plt.title(title)
-        plt.savefig(f"src/{title.lower().replace(' ', '_')}.png")
-        plt.close()
+        plt.show()  
 
     def plot_reconstructions(self, original, ae, vae, n=3):
         plt.figure(figsize=(15, 10))
@@ -88,23 +83,25 @@ class ResultVisualizer:
             # Original
             plt.subplot(3, n, i + 1)
             plt.plot(original[i])
-            if i == 0: plt.ylabel("Original")
+            if i == 0:
+                plt.ylabel("Original")
             
-            # AE Reconstruction
+            # Standard Autoencoder Reconstruction
             plt.subplot(3, n, i + 1 + n)
             recon_ae = ae.predict(original[i:i+1])
             plt.plot(recon_ae[0])
-            if i == 0: plt.ylabel("AE Recon")
+            if i == 0:
+                plt.ylabel("SAE Recon")
 
-            # VAE Reconstruction (Add NaN check)
+            # VAE Reconstruction
             plt.subplot(3, n, i + 1 + 2*n)
             recon_vae = vae.predict(original[i:i+1])
             if not np.isnan(recon_vae).any():
                 plt.plot(recon_vae[0])
             else:
                 plt.text(0.5, 0.5, "NaN Error", ha='center')
-            if i == 0: plt.ylabel("VAE Recon")
+            if i == 0:
+                plt.ylabel("VAE Recon")
             
         plt.tight_layout()
-        plt.savefig("src/reconstruction_quality.png")
-        plt.close()
+        plt.show() 

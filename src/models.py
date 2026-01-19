@@ -84,7 +84,6 @@ class ModelBuilder:
 
         vae = VAE(encoder, decoder)
         
-        # --- FIX HERE: Added run_eagerly=True ---
         vae.compile(optimizer=optimizers.Adam(learning_rate=0.0001), run_eagerly=True)
         return vae, encoder
 
