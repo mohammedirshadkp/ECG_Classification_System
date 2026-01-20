@@ -1,4 +1,4 @@
-<h1>📊 ECG MI Classification — Raw ECG vs Autoencoder vs VAE</h1>
+<h1>📊 ECG MI Classification — Raw ECG vs Standard Autoencoder vs Variational AutoEncoder</h1>
 <p>
 A complete deep learning project for detecting <strong>Myocardial Infarction (MI)</strong> from the
 <strong>PTB-XL ECG dataset</strong> using:
