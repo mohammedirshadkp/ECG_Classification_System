@@ -7,6 +7,7 @@ from sklearn.preprocessing import StandardScaler
 import config
 from utils import log
 
+
 class ECGDataLoader:
     def __init__(self):
         self.scaler = StandardScaler()
@@ -19,11 +20,15 @@ class ECGDataLoader:
 
     def _map_label(self, scp_codes):
         if isinstance(scp_codes, str):
-            try: scp_codes = eval(scp_codes)
-            except: return None
+            try:
+                scp_codes = eval(scp_codes)
+            except:
+                return None
         codes = set(scp_codes.keys())
-        if "NORM" in codes: return "NORM"
-        if any(x in codes for x in ["MI", "AMI", "IMI"]): return "MI"
+        if "NORM" in codes:
+            return "NORM"
+        if any(x in codes for x in ["MI", "AMI", "IMI"]):
+            return "MI"
         return None
 
     def load_and_process(self):
@@ -34,7 +39,7 @@ class ECGDataLoader:
         df = df[df["label"].isin(["NORM", "MI"])]
         df["label_id"] = df["label"].map(config.LABEL_MAP)
 
-        # Balance data
+        # Balance data by sampling equal NORM and MI (up to SAMPLES_PER_CLASS)
         n_norm = min(config.SAMPLES_PER_CLASS, len(df[df["label"] == "NORM"]))
         n_mi = min(config.SAMPLES_PER_CLASS, len(df[df["label"] == "MI"]))
         df = pd.concat([
@@ -54,16 +59,33 @@ class ECGDataLoader:
                     ecg = np.pad(ecg, (0, config.MAX_SAMPLES - len(ecg)), mode="constant")
                 signals.append(ecg)
                 labels.append(row["label_id"])
-            except: continue
+            except:
+                continue
 
-        X, y = np.array(signals), np.array(labels)
-        X_flat = self.scaler.fit_transform(X)
-        X_cnn = X_flat[..., np.newaxis]
+        X = np.array(signals)
+        y = np.array(labels)
 
-        self.X_train_flat, self.X_test_flat, self.y_train, self.y_test = train_test_split(
-            X_flat, y, test_size=config.TEST_SIZE, random_state=config.RANDOM_STATE, stratify=y
+        # Train-test split on raw signals first
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=config.TEST_SIZE,
+            random_state=config.RANDOM_STATE,
+            stratify=y
         )
-        self.X_train_cnn, self.X_test_cnn, _, _ = train_test_split(
-            X_cnn, y, test_size=config.TEST_SIZE, random_state=config.RANDOM_STATE, stratify=y
-        )
+
+        # Scale using train statistics only
+        X_train_flat = self.scaler.fit_transform(X_train)
+        X_test_flat = self.scaler.transform(X_test)
+
+        X_train_cnn = X_train_flat[..., np.newaxis]
+        X_test_cnn = X_test_flat[..., np.newaxis]
+
+        self.X_train_flat = X_train_flat
+        self.X_test_flat = X_test_flat
+        self.X_train_cnn = X_train_cnn
+        self.X_test_cnn = X_test_cnn
+        self.y_train = y_train
+        self.y_test = y_test
+
         return self
