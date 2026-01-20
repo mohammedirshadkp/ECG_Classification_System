@@ -251,7 +251,7 @@ After running <code>main.py</code>, you can find:
 
 <h1>👨‍💻 Author</h1>
 <p>
-<strong>Mohammed Irshad</strong><br />
+<strong>Mohammed Irshad Kunnam Puthoor</strong><br />
 Vytautas Magnus University<br />
 ECG MI Classification – Deep Learning Project
 </p>
