@@ -39,7 +39,7 @@ class ECGDataLoader:
         df = df[df["label"].isin(["NORM", "MI"])]
         df["label_id"] = df["label"].map(config.LABEL_MAP)
 
-        # Balance data by sampling equal NORM and MI (up to SAMPLES_PER_CLASS)
+        # Balance data by sampling equal NORM and MI 
         n_norm = min(config.SAMPLES_PER_CLASS, len(df[df["label"] == "NORM"]))
         n_mi = min(config.SAMPLES_PER_CLASS, len(df[df["label"] == "MI"]))
         df = pd.concat([

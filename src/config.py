@@ -18,7 +18,7 @@ TEST_SIZE = 0.2
 VAL_SPLIT = 0.1
 RANDOM_STATE = 42
 
-# VAE / regularization
+
 KL_WEIGHT = 0.1 
 # Labels
 LABEL_MAP = {"NORM": 0, "MI": 1}
