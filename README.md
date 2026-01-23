@@ -219,16 +219,35 @@ After running <code>main.py</code>, you can find:
 
 <hr />
 
-<h1>🖼 Visual Outputs</h1>
+<<h1>🖼 Visual Outputs</h1>
 <p>The following visual outputs are generated and stored in the <code>results/</code> folder:</p>
-<ul>
-  <li><strong>Figure_1.png</strong> – Overall model comparison / summary visualization (e.g., accuracy or pipeline overview).</li>
-  <li><strong>Figure_2.png</strong> – Confusion matrix for the CNN trained on <strong>Raw ECG</strong>.</li>
-  <li><strong>Figure_3.png</strong> – Confusion matrix for the CNN trained on <strong>AE latent features</strong>.</li>
-  <li><strong>Figure_4.png</strong> – Confusion matrix for the CNN trained on <strong>VAE latent features</strong>.</li>
-</ul>
+
+<h2>1. Overall Model Comparison</h2>
+<p>This figure summarizes the performance of all three pipelines (Raw ECG, SAE latent, VAE latent).</p>
+
+<img src="results/Figure_1.png" alt="Model Comparison" width="600"/>
 
 <hr />
+
+<h2>2. Confusion Matrix — Raw ECG</h2>
+<p>Confusion matrix for the CNN trained directly on raw ECG signals.</p>
+
+<img src="results/Figure_2.png" alt="Raw ECG Confusion Matrix" width="600"/>
+
+<hr />
+
+<h2>3. Confusion Matrix — SAE Latent Features</h2>
+<p>Confusion matrix for the CNN trained on Standard Autoencoder latent representations.</p>
+
+<img src="results/Figure_3.png" alt="SAE Confusion Matrix" width="600"/>
+
+<hr />
+
+<h2>4. Confusion Matrix — VAE Latent Features</h2>
+<p>Confusion matrix for the CNN trained on Variational Autoencoder latent representations.</p>
+
+<img src="results/Figure_4.png" alt="VAE Confusion Matrix" width="600"/>
+
 
 
 <h2>Conclusion</h2>
