@@ -30,7 +30,7 @@ def run_pipeline():
     builder = ModelBuilder(latent_dim=config.LATENT_DIM)
     research_data = {}
 
-    # Compute class weights for classifier (helps MI detection)
+    # Compute class weights for classifier 
     class_weights_array = class_weight.compute_class_weight(
         class_weight="balanced",
         classes=np.unique(loader.y_train),
@@ -64,6 +64,7 @@ def run_pipeline():
         verbose=2
     )
 
+    # Latent features from VAE encoder
     z_vae_train, _, _ = encoder_vae.predict(loader.X_train_flat)
     z_vae_test, _, _ = encoder_vae.predict(loader.X_test_flat)
 
@@ -104,10 +105,11 @@ def run_pipeline():
     viz.plot_roc_curves()
 
     log("Generating t-SNE and Reconstruction plots...")
+ 
     viz.plot_latent_tsne(z_vae_test, loader.y_test, title="VAE Latent Space t-SNE")
     viz.plot_reconstructions(loader.X_test_flat, ae, vae, n=3)
 
-    log("Pipeline complete. All figures saved as .png files in the src folder.")
+    log("Pipeline complete. All figures saved as .png files in the results folder.")
 
 
 if __name__ == "__main__":

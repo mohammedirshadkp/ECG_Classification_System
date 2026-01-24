@@ -2,27 +2,35 @@ import tensorflow as tf
 from tensorflow.keras import layers, Model, Input, optimizers
 import numpy as np
 import config 
+
+
 class VAE(Model):
     def __init__(self, encoder, decoder, kl_weight=0.1, **kwargs):
         super(VAE, self).__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
         self.kl_weight = kl_weight
+
         self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
+        self.recon_loss_tracker = tf.keras.metrics.Mean(name="reconstruction_loss")
+        self.kl_loss_tracker = tf.keras.metrics.Mean(name="kl_loss")
 
     @property
     def metrics(self):
-        return [self.total_loss_tracker]
+        return [self.total_loss_tracker,
+                self.recon_loss_tracker,
+                self.kl_loss_tracker]
 
     def train_step(self, data):
         if isinstance(data, tuple):
             data = data[0]
 
         with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
-            reconstruction = self.decoder(z)
+            # Forward pass through encoder and decoder
+            z_mean, z_log_var, z = self.encoder(data, training=True)
+            reconstruction = self.decoder(z, training=True)
 
-            # Reconstruction loss (MSE, no clipping, decoder is linear)
+            # Reconstruction loss (MSE)
             reconstruction_loss = tf.reduce_mean(
                 tf.reduce_sum(tf.keras.losses.mse(data, reconstruction), axis=-1)
             )
@@ -37,8 +45,25 @@ class VAE(Model):
         grads = tape.gradient(total_loss, self.trainable_weights)
         grads = [tf.clip_by_norm(g, 1.0) if g is not None else g for g in grads]
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+
         self.total_loss_tracker.update_state(total_loss)
-        return {"loss": self.total_loss_tracker.result()}
+        self.recon_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+
+        return {
+            "loss": self.total_loss_tracker.result(),
+            "reconstruction_loss": self.recon_loss_tracker.result(),
+            "kl_loss": self.kl_loss_tracker.result(),
+        }
+
+    def call(self, inputs, training=False):
+        """
+        Full VAE forward pass: encode -> sample -> decode.
+        This enables vae(x) and vae.predict(x) for reconstructions.
+        """
+        z_mean, z_log_var, z = self.encoder(inputs, training=training)
+        reconstruction = self.decoder(z, training=training)
+        return reconstruction
 
 
 class ModelBuilder:
