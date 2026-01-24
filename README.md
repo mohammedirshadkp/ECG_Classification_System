@@ -1,4 +1,4 @@
-<h1>📊 ECG MI Classification — Raw ECG vs Standard Autoencoder vs Variational AutoEncoder</h1>
+<h1>📊 ECG Classification — Raw ECG vs Standard Autoencoder vs Variational AutoEncoder</h1>
 <p>
 A complete deep learning project for detecting <strong>Myocardial Infarction (MI)</strong> from the
 <strong>PTB-XL ECG dataset</strong> using:
@@ -214,7 +214,6 @@ After running <code>main.py</code>, you can find:
 <ul>
   <li>Confusion matrix figures in <code>results/Figure_2.png</code>, <code>Figure_3.png</code>, <code>Figure_4.png</code></li>
   <li>Additional plots or comparisons in <code>results/Figure_1.png</code></li>
-  <li>Logs and metrics (if implemented) via <code>utils.py</code> and printed to console or files</li>
 </ul>
 
 <hr />
@@ -230,7 +229,7 @@ After running <code>main.py</code>, you can find:
 
 <hr />
 
-<h1>📄 Conclusion &amp; Future Work</h1>
+
 <h2>Conclusion</h2>
 <ul>
   <li>Raw ECG gave the best overall performance.</li>
@@ -239,31 +238,6 @@ After running <code>main.py</code>, you can find:
   <li>Raw ECG signals preserved full morphology, giving clearly superior classification performance.</li>
 </ul>
 
-<h2>Future Work</h2>
-<ul>
-  <li>Explore deeper or multi-lead CNN architectures for richer MI feature extraction.</li>
-  <li>Increase latent-space capacity or use supervised autoencoders to preserve MI-specific patterns.</li>
-  <li>Experiment with longer training schedules and data augmentation to reduce false negatives.</li>
-  <li>Integrate clinical metadata and multi-label outputs for more realistic diagnostic modeling.</li>
-</ul>
 
-<hr />
 
-<h1>👨‍💻 Author</h1>
-<p>
-<strong>Mohammed Irshad Kunnam Puthoor</strong><br />
-Vytautas Magnus University<br />
-ECG MI Classification – Deep Learning Project
-</p>
 
-<hr />
-
-<h1>📚 References</h1>
-<ul>
-  <li>PTB-XL: A large publicly available electrocardiography dataset – PhysioNet.</li>
-  <li>Kingma, D. P., &amp; Welling, M. – Auto-Encoding Variational Bayes.</li>
-  <li>Goodfellow, I. et al. – Deep Learning, MIT Press.</li>
-  <li>Relevant ECG classification and autoencoder-based representation learning literature.</li>
-</ul>
-
-<hr />
