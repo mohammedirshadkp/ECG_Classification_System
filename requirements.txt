@@ -6,3 +6,4 @@ wfdb
 scipy
 matplotlib
 seaborn
+xgboost

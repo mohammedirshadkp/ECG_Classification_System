@@ -1,116 +1,169 @@
-import sys
-import os
+import sys, os
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Fix MKL primitive error on Windows
+import time
 import numpy as np
-import random
-import tensorflow as tf
+import psutil
+from sklearn.decomposition import PCA
+from sklearn.svm import SVC
+from xgboost import XGBClassifier
 from sklearn.metrics import accuracy_score
-from sklearn.utils import class_weight
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import config
 from utils import log
 from data_loader import ECGDataLoader
 from models import ModelBuilder
 from visualizer import ResultVisualizer
 
+def apply_mae_mask(X, patch_size=config.PATCH_SIZE, mask_ratio=config.MASK_RATIO):
+    """Zeroes out patches of the signal to force the network to learn the ECG"""
+    X_masked = X.copy()
+    num_patches = X.shape[1] // patch_size
+    num_mask = int(num_patches * mask_ratio)
+    for i in range(X.shape[0]):
+        mask_indices = np.random.choice(num_patches, num_mask, replace=False)
+        for idx in mask_indices:
+            start = idx * patch_size
+            end = start + patch_size
+            X_masked[i, start:end, :] = 0
+    return X_masked
 
-def set_global_seeds(seed: int):
-    random.seed(seed)
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
+def timed_predict(model, X, name):
+    """Returns predictions and inference time in seconds"""
+    start = time.time()
+    preds = model.predict(X, verbose=0)
+    elapsed = time.time() - start
+    log(f"Inference [{name}]: {elapsed*1000:.1f}ms for {len(X)} samples")
+    return preds, elapsed
 
+def timed_predict_ml(clf, X, name):
+    """Returns predictions and inference time for sklearn models"""
+    start = time.time()
+    preds = clf.predict(X)
+    elapsed = time.time() - start
+    log(f"Inference [{name}]: {elapsed*1000:.1f}ms for {len(X)} samples")
+    return preds, elapsed
 
 def run_pipeline():
-    # 0. Reproducibility
-    set_global_seeds(config.RANDOM_STATE)
+    process = psutil.Process(os.getpid())
 
-    # 1. Load and Preprocess Data
+    log("1. Loading and Preprocessing 12-Lead Data...")
     loader = ECGDataLoader().load_and_process()
-    builder = ModelBuilder(latent_dim=config.LATENT_DIM)
+    builder = ModelBuilder()
     research_data = {}
+    latency_data = {}
+    proba_data = {}  # for AUC-ROC curves
 
-    # Compute class weights for classifier 
-    class_weights_array = class_weight.compute_class_weight(
-        class_weight="balanced",
-        classes=np.unique(loader.y_train),
-        y=loader.y_train
-    )
-    class_weights = {i: w for i, w in enumerate(class_weights_array)}
-    log(f"Class weights used for CNN: {class_weights}")
+    log("2. Generating MAE Masked Data...")
+    X_train_masked = apply_mae_mask(loader.X_train)
 
-    # 2. Autoencoder (AE) Pipeline
-    log("Running AE Pipeline...")
-    ae, encoder_ae = builder.build_ae(input_dim=config.MAX_SAMPLES)
-    ae.fit(
-        loader.X_train_flat,
-        loader.X_train_flat,
-        epochs=config.EPOCHS_AE,
-        batch_size=config.BATCH_SIZE,
-        validation_split=config.VAL_SPLIT,
-        verbose=2
-    )
+    log("3. Training Feature Extractors...")
+    sae, encoder_sae = builder.build_autoencoder()
+    log("Training SAE...")
+    sae.fit(loader.X_train, loader.X_train, epochs=config.EPOCHS_AE,
+            batch_size=config.BATCH_SIZE, verbose=0)
 
-    z_ae_train = encoder_ae.predict(loader.X_train_flat)
-    z_ae_test = encoder_ae.predict(loader.X_test_flat)
+    mae, encoder_mae = builder.build_autoencoder()
+    log("Training MAE (Self-Supervised)...")
+    mae.fit(X_train_masked, loader.X_train, epochs=config.EPOCHS_AE,
+            batch_size=config.BATCH_SIZE, verbose=0)
 
-    # 3. Variational Autoencoder (VAE) Pipeline
-    log("Running VAE Pipeline...")
-    vae, encoder_vae = builder.build_vae(input_dim=config.MAX_SAMPLES)
-    vae.fit(
-        loader.X_train_flat,
-        epochs=config.EPOCHS_VAE,
-        batch_size=config.BATCH_SIZE,
-        verbose=2
-    )
+    # Extract Latent Features
+    X_train_sae = encoder_sae.predict(loader.X_train, verbose=0)
+    X_test_sae = encoder_sae.predict(loader.X_test, verbose=0)
+    X_train_mae = encoder_mae.predict(loader.X_train, verbose=0)
+    X_test_mae = encoder_mae.predict(loader.X_test, verbose=0)
 
-    # Latent features from VAE encoder
-    z_vae_train, _, _ = encoder_vae.predict(loader.X_train_flat)
-    z_vae_test, _, _ = encoder_vae.predict(loader.X_test_flat)
+    # PCA Baseline
+    log("Fitting PCA Baseline...")
+    pca = PCA(n_components=config.LATENT_DIM)
+    X_train_flat = loader.X_train.reshape(loader.X_train.shape[0], -1)
+    X_test_flat = loader.X_test.reshape(loader.X_test.shape[0], -1)
+    X_train_pca = pca.fit_transform(X_train_flat)
+    X_test_pca = pca.transform(X_test_flat)
 
-    # 4. Classification & Evaluation
-    pipelines = [
-        ("RAW ECG", loader.X_train_cnn, loader.X_test_cnn, config.MAX_SAMPLES),
-        ("AE Latent", z_ae_train[..., np.newaxis], z_ae_test[..., np.newaxis], config.LATENT_DIM),
-        ("VAE Latent", z_vae_train[..., np.newaxis], z_vae_test[..., np.newaxis], config.LATENT_DIM),
+    log("4. Training Classifiers...")
+
+    # Mode A: Conventional ML
+    ml_pipelines = [
+        ("PCA + SVM",       X_train_pca, X_test_pca, SVC(probability=True)),
+        ("SAE + SVM",       X_train_sae, X_test_sae, SVC(probability=True)),
+        ("MAE + SVM (Ours)",X_train_mae, X_test_mae, SVC(probability=True)),
+        ("MAE + XGBoost",   X_train_mae, X_test_mae, XGBClassifier(eval_metric='mlogloss')),
     ]
 
-    for name, train_data, test_data, length in pipelines:
-        log(f"Training CNN on {name}")
-        cnn = builder.build_cnn(length)
-        cnn.fit(
-            train_data,
-            loader.y_train,
-            epochs=config.EPOCHS_CNN,
-            batch_size=config.BATCH_SIZE,
-            class_weight=class_weights,
-            verbose=2
-        )
+    for name, x_tr, x_te, clf in ml_pipelines:
+        log(f"Training {name}...")
+        clf.fit(x_tr, loader.y_train)
+        preds, elapsed = timed_predict_ml(clf, x_te, name)
+        proba = clf.predict_proba(x_te)
+        research_data[name] = {"accuracy": accuracy_score(loader.y_test, preds), "y_pred": preds}
+        latency_data[name] = elapsed
+        proba_data[name] = proba
 
-        probs = cnn.predict(test_data).flatten()
-        preds = (probs > 0.5).astype(int)
+    # Mode B: Deep Learning — BiLSTM
+    log("Training Raw + BiLSTM...")
+    bilstm = builder.build_bilstm()
+    bilstm.fit(loader.X_train, loader.y_train, epochs=config.EPOCHS_DL,
+               batch_size=config.BATCH_SIZE, verbose=0)
+    bilstm_probs, elapsed = timed_predict(bilstm, loader.X_test, "BiLSTM")
+    bilstm_preds = np.argmax(bilstm_probs, axis=1)
+    research_data["Raw + BiLSTM"] = {"accuracy": accuracy_score(loader.y_test, bilstm_preds), "y_pred": bilstm_preds}
+    latency_data["Raw + BiLSTM"] = elapsed
+    proba_data["Raw + BiLSTM"] = bilstm_probs
 
-        research_data[name] = {
-            "accuracy": accuracy_score(loader.y_test, preds),
-            "y_pred": preds,
-            "y_probs": probs,
-        }
+    # Mode B: Deep Learning — 1D-CNN
+    log("Training Raw + 1D-CNN...")
+    cnn = builder.build_cnn()
+    cnn.fit(loader.X_train, loader.y_train, epochs=config.EPOCHS_DL,
+            batch_size=config.BATCH_SIZE, verbose=0)
+    cnn_probs, elapsed = timed_predict(cnn, loader.X_test, "1D-CNN")
+    cnn_preds = np.argmax(cnn_probs, axis=1)
+    research_data["Raw + 1D-CNN"] = {"accuracy": accuracy_score(loader.y_test, cnn_preds), "y_pred": cnn_preds}
+    latency_data["Raw + 1D-CNN"] = elapsed
+    proba_data["Raw + 1D-CNN"] = cnn_probs
 
-    # 5. Generate Research Figures
-    log("Generating Research-Grade Visualizations...")
+    ram_used = process.memory_info().rss / 1024 / 1024
+    log(f"Peak RAM usage: {ram_used:.0f} MB")
+
+    log("5. Generating Master Thesis Visuals...")
     viz = ResultVisualizer(research_data, loader.y_test)
 
+    # Task 2: MAE masking strategy
+    viz.plot_mae_masking(loader.X_train[0], X_train_masked[0])
+
+    # Task 3: MAE reconstruction quality
+    viz.plot_reconstruction(loader.X_train[0], X_train_masked[0], mae)
+
+    # Task 4/5: Accuracy comparison
     viz.plot_accuracy_comparison()
+
+    # Task 5: Per-class F1 heatmap
+    viz.plot_f1_heatmap()
+
+    # Task 5: Inference latency benchmarking
+    viz.plot_resource_metrics(latency_data)
+
+    # Task 5: Latent space t-SNE
+    viz.plot_tsne(X_test_mae, X_test_sae)
+
+    # Task 6: XAI Saliency Maps (using CNN — best fit for gradient saliency)
+    log("Generating XAI Saliency Maps...")
+    sample_idx = 0
+    viz.plot_saliency_map(cnn, loader.X_test[sample_idx],
+                          loader.y_test[sample_idx], model_name="1D-CNN")
+
+    # Task 5: Precision & Recall
+    viz.plot_precision_recall_table()
+
+    # Task 5: AUC-ROC curves
+    viz.plot_roc_curves(proba_data)
+
+    # Task 4/5: Confusion matrices
     viz.plot_confusion_matrices()
-    viz.plot_roc_curves()
 
-    log("Generating t-SNE and Reconstruction plots...")
- 
-    viz.plot_latent_tsne(z_vae_test, loader.y_test, title="VAE Latent Space t-SNE")
-    viz.plot_reconstructions(loader.X_test_flat, ae, vae, n=3)
-
-    log("Pipeline complete. All figures saved as .png files in the results folder.")
-
+    log("Complete. All thesis visuals saved!")
+    log(f"Outputs: accuracy, f1_heatmap, latency, tsne, saliency, reconstruction, masking, confusion")
 
 if __name__ == "__main__":
     run_pipeline()

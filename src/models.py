@@ -1,148 +1,64 @@
-import tensorflow as tf
 from tensorflow.keras import layers, Model, Input, optimizers
-import numpy as np
 import config 
-
-
-class VAE(Model):
-    def __init__(self, encoder, decoder, kl_weight=0.1, **kwargs):
-        super(VAE, self).__init__(**kwargs)
-        self.encoder = encoder
-        self.decoder = decoder
-        self.kl_weight = kl_weight
-
-        self.total_loss_tracker = tf.keras.metrics.Mean(name="total_loss")
-        self.recon_loss_tracker = tf.keras.metrics.Mean(name="reconstruction_loss")
-        self.kl_loss_tracker = tf.keras.metrics.Mean(name="kl_loss")
-
-    @property
-    def metrics(self):
-        return [self.total_loss_tracker,
-                self.recon_loss_tracker,
-                self.kl_loss_tracker]
-
-    def train_step(self, data):
-        if isinstance(data, tuple):
-            data = data[0]
-
-        with tf.GradientTape() as tape:
-            # Forward pass through encoder and decoder
-            z_mean, z_log_var, z = self.encoder(data, training=True)
-            reconstruction = self.decoder(z, training=True)
-
-            # Reconstruction loss (MSE)
-            reconstruction_loss = tf.reduce_mean(
-                tf.reduce_sum(tf.keras.losses.mse(data, reconstruction), axis=-1)
-            )
-
-            # KL divergence with clipping to avoid NaNs
-            z_log_var = tf.clip_by_value(z_log_var, -10.0, 10.0)
-            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
-
-            total_loss = reconstruction_loss + self.kl_weight * kl_loss
-
-        grads = tape.gradient(total_loss, self.trainable_weights)
-        grads = [tf.clip_by_norm(g, 1.0) if g is not None else g for g in grads]
-        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
-
-        self.total_loss_tracker.update_state(total_loss)
-        self.recon_loss_tracker.update_state(reconstruction_loss)
-        self.kl_loss_tracker.update_state(kl_loss)
-
-        return {
-            "loss": self.total_loss_tracker.result(),
-            "reconstruction_loss": self.recon_loss_tracker.result(),
-            "kl_loss": self.kl_loss_tracker.result(),
-        }
-
-    def call(self, inputs, training=False):
-        """
-        Full VAE forward pass: encode -> sample -> decode.
-        This enables vae(x) and vae.predict(x) for reconstructions.
-        """
-        z_mean, z_log_var, z = self.encoder(inputs, training=training)
-        reconstruction = self.decoder(z, training=training)
-        return reconstruction
-
 
 class ModelBuilder:
     def __init__(self, latent_dim=config.LATENT_DIM):
         self.latent_dim = latent_dim
-        self.opt = optimizers.Adam(learning_rate=0.0001, clipnorm=1.0)
 
-    def build_ae(self, input_dim=1000):
-        encoder_input = Input(shape=(input_dim,))
-        x = layers.Dense(512, activation="relu")(encoder_input)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(256, activation="relu")(x)
-        latent = layers.Dense(self.latent_dim, activation="linear")(x)  # linear latent
+    def build_autoencoder(self, input_shape=(config.MAX_SAMPLES, config.CHANNELS)):
+        """Builds an Encoder-Decoder structure used for BOTH SAE and MAE"""
+        # ENCODER
+        encoder_input = Input(shape=input_shape)
+        x = layers.Conv1D(32, 5, activation="relu", padding="same")(encoder_input)
+        x = layers.MaxPooling1D(2)(x)
+        x = layers.Conv1D(64, 5, activation="relu", padding="same")(x)
+        x = layers.MaxPooling1D(2)(x)
+        x = layers.Flatten()(x)
+        latent = layers.Dense(self.latent_dim, activation="relu", name="latent_features")(x)
+        encoder = Model(encoder_input, latent, name="Encoder")
 
-        encoder = Model(encoder_input, latent, name="AE_Encoder")
-
+        # DECODER
         decoder_input = Input(shape=(self.latent_dim,))
-        x = layers.Dense(256, activation="relu")(decoder_input)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(512, activation="relu")(x)
-        output = layers.Dense(input_dim, activation="linear")(x)  # match scaled input
-
-        decoder = Model(decoder_input, output, name="AE_Decoder")
-
-        autoencoder_output = decoder(latent)
-        autoencoder = Model(encoder_input, autoencoder_output, name="AE")
-        autoencoder.compile(
-            optimizer=optimizers.Adam(learning_rate=0.0001),
-            loss="mse"
-        )
+        x = layers.Dense((input_shape[0]//4) * 64, activation="relu")(decoder_input)
+        x = layers.Reshape((input_shape[0]//4, 64))(x)
+        x = layers.UpSampling1D(2)(x)
+        x = layers.Conv1D(32, 5, activation="relu", padding="same")(x)
+        x = layers.UpSampling1D(2)(x)
+        output = layers.Conv1D(config.CHANNELS, 5, activation="linear", padding="same")(x)
+        
+        decoder = Model(decoder_input, output, name="Decoder")
+        
+        # FULL AE
+        autoencoder_output = decoder(encoder(encoder_input))
+        autoencoder = Model(encoder_input, autoencoder_output, name="Autoencoder")
+        autoencoder.compile(optimizer=optimizers.Adam(learning_rate=0.001), loss="mse")
+        
         return autoencoder, encoder
 
-    def build_vae(self, input_dim=1000):
-        # Encoder
-        encoder_input = Input(shape=(input_dim,))
-        x = layers.Dense(512, activation="relu")(encoder_input)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(256, activation="relu")(x)
+    def build_bilstm(self, input_shape=(config.MAX_SAMPLES, config.CHANNELS), num_classes=5):
+        """The 'High Accuracy' Deep Learning Mode"""
+        inputs = Input(shape=input_shape)
+        x = layers.Bidirectional(layers.LSTM(64, return_sequences=True))(inputs)
+        x = layers.GlobalAveragePooling1D()(x)
+        x = layers.Dropout(0.3)(x)
+        outputs = layers.Dense(num_classes, activation='softmax')(x)
 
-        z_mean = layers.Dense(self.latent_dim, name="z_mean")(x)
-        z_log_var = layers.Dense(self.latent_dim, name="z_log_var")(x)
+        model = Model(inputs, outputs)
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        return model
 
-        def sampling(args):
-            z_m, z_lv = args
-            epsilon = tf.random.normal(shape=tf.shape(z_m))
-            return z_m + tf.exp(0.5 * z_lv) * epsilon
+    def build_cnn(self, input_shape=(config.MAX_SAMPLES, config.CHANNELS), num_classes=5):
+        """1D-CNN for ECG classification"""
+        inputs = Input(shape=input_shape)
+        x = layers.Conv1D(32, 7, activation='relu', padding='same')(inputs)
+        x = layers.MaxPooling1D(2)(x)
+        x = layers.Conv1D(64, 5, activation='relu', padding='same')(x)
+        x = layers.MaxPooling1D(2)(x)
+        x = layers.Conv1D(128, 3, activation='relu', padding='same')(x)
+        x = layers.GlobalAveragePooling1D()(x)
+        x = layers.Dropout(0.3)(x)
+        outputs = layers.Dense(num_classes, activation='softmax')(x)
 
-        z = layers.Lambda(sampling, name="z")([z_mean, z_log_var])
-        encoder = Model(encoder_input, [z_mean, z_log_var, z], name="VAE_Encoder")
-
-        # Decoder
-        decoder_input = Input(shape=(self.latent_dim,))
-        x = layers.Dense(256, activation="relu")(decoder_input)
-        x = layers.BatchNormalization()(x)
-        x = layers.Dense(512, activation="relu")(x)
-        output = layers.Dense(input_dim, activation="linear")(x)  # match scaled input
-
-        decoder = Model(decoder_input, output, name="VAE_Decoder")
-
-        vae = VAE(encoder, decoder, kl_weight=config.KL_WEIGHT)
-        vae.compile(
-            optimizer=optimizers.Adam(learning_rate=0.0001),
-            run_eagerly=True
-        )
-        return vae, encoder
-
-    def build_cnn(self, input_length):
-        model = tf.keras.Sequential([
-            layers.Input(shape=(input_length, 1)),
-            layers.Conv1D(32, 3, activation='relu'),
-            layers.MaxPooling1D(2),
-            layers.Flatten(),
-            layers.Dense(64, activation='relu'),
-            layers.Dropout(0.2),
-            layers.Dense(1, activation='sigmoid')
-        ])
-        model.compile(
-            optimizer=optimizers.Adam(learning_rate=0.0001),
-            loss='binary_crossentropy',
-            metrics=['accuracy']
-        )
+        model = Model(inputs, outputs)
+        model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
         return model

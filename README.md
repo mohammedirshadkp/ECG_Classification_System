@@ -1,243 +1,105 @@
-<h1>📊 ECG Classification — Raw ECG vs Standard Autoencoder vs Variational AutoEncoder</h1>
-<p>
-A complete deep learning project for detecting <strong>Myocardial Infarction (MI)</strong> from the
-<strong>PTB-XL ECG dataset</strong> using:
-</p>
-<ul>
-  <li>Raw ECG signals (single lead, 1000 samples)</li>
-  <li>Standard Autoencoder (SAE) latent features</li>
-  <li>Variational Autoencoder (VAE) latent features</li>
-  <li>1D CNN classifier for MI vs Normal</li>
-</ul>
-<p>
-This repository contains the full experiment pipeline:
-</p>
-<ul>
-  <li>Source code</li>
-  <li>Dataset download script</li>
-  <li>Preprocessing and training pipeline</li>
-  <li>Evaluation and visualization scripts</li>
-  <li>Generated result figures</li>
-  <li>README documentation</li>
-</ul>
+# RP4 — Automated ECG Analysis System
+**Master Thesis | Mohammed Irshad Kunnam Puthoor | MSc Applied Informatics | VMU | 2026**
+**Supervisor: Ausra Saudargiene**
 
-<hr />
+---
 
-<h2>📁 Project Structure</h2>
+## Project Title
+Development of a Configurable ECG Classification System: A Comparative Study of Deep Learning and Conventional Machine Learning Approaches
 
-<pre><code>RP3_ECG_MI_Classification/
-│
-├── data/
-│   ├── records100/                 <!-- PTB-XL waveform records (100 Hz) -->
-│   ├── records500/                 <!-- PTB-XL waveform records (500 Hz) -->
-│   ├── ptbxl_database.csv          <!-- PTB-XL metadata -->
-│   └── scp_statements.csv          <!-- Diagnostic statement mappings -->
-│
-├── results/
-│   ├── Figure_1.png                <!-- e.g., model comparison / accuracy -->
-│   ├── Figure_2.png                <!-- confusion matrix: RAW ECG -->
-│   ├── Figure_3.png                <!-- confusion matrix: AE latent -->
-│   └── Figure_4.png                <!-- confusion matrix: VAE latent -->
-│
+## Goal
+A modular, dual-mode ECG classification framework that evaluates Masked Autoencoders (MAE) against benchmark feature extraction methods (PCA, Standard Autoencoders) and compares Deep Learning classifiers (1D-CNN, BiLSTM) with conventional ML models (SVM, XGBoost).
+
+---
+
+## System Modes
+
+| Mode | Pipeline | Best For |
+|------|----------|----------|
+| **Efficient Scan** | MAE features + SVM / XGBoost | Fast screening, resource-limited environments |
+| **Full Analysis** | Raw ECG + BiLSTM / 1D-CNN | High-accuracy diagnosis |
+
+---
+
+## Results (10,000 PTB-XL Records, GPU)
+
+| Model | Mode | Accuracy | Macro-F1 | Latency |
+|-------|------|----------|----------|---------|
+| PCA + SVM | Efficient Scan | 51.9% | 0.223 | 1753ms |
+| SAE + SVM | Efficient Scan | 59.7% | 0.352 | 1580ms |
+| **MAE + SVM (Ours)** | **Efficient Scan** | **60.0%** | **0.346** | 1640ms |
+| MAE + XGBoost | Efficient Scan | 57.1% | 0.334 | **12.8ms** |
+| Raw + BiLSTM | Full Analysis | 72.7% | 0.515 | 2163ms |
+| **Raw + 1D-CNN** | **Full Analysis** | **76.8%** | **0.631** | 1176ms |
+
+---
+
+## Dataset
+- **PTB-XL** — 21,430 clinical 12-lead ECG recordings
+- 5 cardiac superclasses: NORM, MI, STTC, HYP, CD
+- Sampling rate: 100Hz | Signal length: 10 seconds (1000 samples)
+
+---
+
+## Core Innovation — Masked Autoencoder (MAE)
+- Randomly masks **75% of ECG signal patches** during training
+- Forces the model to reconstruct the full signal from only 25% visible data
+- Self-supervised — no labels needed for feature learning
+- Outperforms PCA (51.9%) and SAE (59.7%) baselines
+
+---
+
+## Project Structure
+
+```
+RP4_Automated_ECG_Analysis/
 ├── src/
-│   ├── __pycache__/                <!-- Python cache files -->
-│   ├── config.py                   <!-- Global configuration & hyperparameters -->
-│   ├── data_loader.py              <!-- ECG loading, filtering, preprocessing -->
-│   ├── download_ptbxl.py           <!-- Script to download PTB-XL dataset -->
-│   ├── main.py                     <!-- Main experiment pipeline (train & evaluate) -->
-│   ├── models.py                   <!-- AE, VAE, and CNN model definitions -->
-│   ├── utils.py                    <!-- Logging, metrics, helper functions -->
-│   └── visualizer.py               <!-- Plotting confusion matrices & figures -->
-│
-├── .gitignore
-├── README.md
-└── requirements.txt
-</code></pre>
+│   ├── config.py          # All hyperparameters and paths
+│   ├── data_loader.py     # PTB-XL loading, filtering, scaling
+│   ├── models.py          # MAE, SAE, BiLSTM, 1D-CNN architectures
+│   ├── main.py            # Full pipeline runner
+│   ├── visualizer.py      # All 10 result visualizations
+│   └── utils.py           # Logging utility
+├── kaggle_notebook.ipynb  # Self-contained Kaggle GPU notebook
+├── requirements.txt       # Python dependencies
+└── README.md
+```
 
-<hr />
+---
 
-<h1>📘 Project Overview</h1>
-<p>
-This project investigates how different ECG representations affect <strong>binary MI classification</strong> (MI vs Normal).
-We compare three input types:
-</p>
-<ul>
-  <li><strong>Raw ECG</strong> (single lead, fixed length)</li>
-  <li><strong>Standard Autoencoder (SAE) latent features</strong></li>
-  <li><strong>Variational Autoencoder (VAE) latent features</strong></li>
-</ul>
-<p>
-A lightweight <strong>1D CNN</strong> is trained on each representation to evaluate performance, confusion matrices, and
-the impact of compression on diagnostic usefulness.
-</p>
-<p>
-This work is part of a <strong>Machine Learning / Deep Learning coursework project</strong>.
-</p>
+## How to Run
 
-<hr />
+### Local
+```bash
+pip install -r requirements.txt
+python src/main.py
+```
 
-<h1>❓ Research Questions</h1>
-<ol>
-  <li>Does raw ECG outperform compressed latent features for MI detection?</li>
-  <li>Can a standard autoencoder learn useful ECG representations for classification?</li>
-  <li>How does a variational autoencoder (VAE) compare to a standard AE?</li>
-  <li>What are the trade-offs between accuracy and computational efficiency?</li>
-</ol>
+### Kaggle (Recommended — GPU)
+1. Upload `kaggle_notebook.ipynb` to Kaggle
+2. Add PTB-XL dataset via Add Data
+3. Enable GPU accelerator
+4. Enable Internet toggle
+5. Run All
 
-<hr />
+---
 
-<h1>🧠 Methods &amp; Techniques</h1>
+## Tech Stack
+- Python 3.12
+- TensorFlow 2.19 (GPU)
+- scikit-learn | XGBoost | wfdb
+- NumPy | Pandas | Matplotlib | Seaborn
 
-<h2>1. ECG Preprocessing</h2>
-<ul>
-  <li>Load PTB-XL metadata from <code>ptbxl_database.csv</code> and <code>scp_statements.csv</code></li>
-  <li>Filter only <strong>Normal</strong> and <strong>MI</strong> classes</li>
-  <li>Select a single ECG lead (e.g., lead 0)</li>
-  <li>Resample / crop to a fixed length (e.g., 1000 samples)</li>
-  <li>Apply <strong>z-score normalization</strong> per signal</li>
-  <li>Split into <strong>train/test</strong> (typically 80% / 20%)</li>
-</ul>
+---
 
-<h2>2. Standard Autoencoder (SAE)</h2>
-<ul>
-  <li>Encoder compresses ECG into a low-dimensional latent vector</li>
-  <li>Decoder reconstructs the original ECG from the latent space</li>
-  <li>Trained with <strong>MSE loss</strong> to minimize reconstruction error</li>
-  <li>Latent features are later used as input to the CNN classifier</li>
-</ul>
-
-<h2>3. Variational Autoencoder (VAE)</h2>
-<ul>
-  <li>Encoder outputs mean and variance for latent distribution</li>
-  <li>Uses the <strong>reparameterization trick</strong> to sample latent vectors</li>
-  <li>Loss combines reconstruction loss + <strong>KL divergence</strong></li>
-  <li>Produces smoother latent space, also fed into the CNN classifier</li>
-</ul>
-
-<h2>4. CNN Classifier</h2>
-<ul>
-  <li>1D convolutional layers for temporal feature extraction</li>
-  <li>Max pooling and dense layers for classification</li>
-  <li>Trained separately on:
-    <ul>
-      <li>Raw ECG signals</li>
-      <li>SAE latent features</li>
-      <li>VAE latent features</li>
-    </ul>
-  </li>
-</ul>
-
-<h2>5. Evaluation &amp; Visualization</h2>
-<ul>
-  <li>Accuracy and confusion matrices for each representation</li>
-  <li>Comparison of <strong>TN, TP, FP, FN</strong> across models</li>
-  <li>Plots generated via <code>visualizer.py</code> and saved in <code>results/</code></li>
-</ul>
-
-<hr />
-
-<h1>📊 Results Summary</h1>
-
-<h2>Confusion Matrix Interpretation</h2>
-<ul>
-  <li><strong>TN (True Negative)</strong>: Model predicted Normal, and it was actually Normal.</li>
-  <li><strong>TP (True Positive)</strong>: Model predicted MI, and it was actually MI.</li>
-  <li><strong>FP (False Positive)</strong>: Model predicted MI, but it was actually Normal.</li>
-  <li><strong>FN (False Negative)</strong>: Model predicted Normal, but it was actually MI.</li>
-</ul>
-
-<h2>Key Findings</h2>
-<ul>
-  <li><strong>Raw ECG</strong> gave the best overall performance and most reliable MI detection.</li>
-  <li><strong>Standard Autoencoder</strong> was faster but less accurate than raw ECG.</li>
-  <li><strong>VAE latent features</strong> were smooth but showed weaker class separability.</li>
-  <li>Latent-space models compressed away important MI-specific patterns, reducing diagnostic usefulness.</li>
-</ul>
-
-<hr />
-
-<h1>🧪 How to Run the Project</h1>
-
-<h2>1. Create and Activate a Virtual Environment (Optional but Recommended)</h2>
-<pre><code>python -m venv venv
-source venv/bin/activate      # On Linux/Mac
-venv\Scripts\activate         # On Windows
-</code></pre>
-
-<h2>2. Install Required Libraries</h2>
-<pre><code>pip install -r requirements.txt
-</code></pre>
-
-<h2>3. Download the PTB-XL Dataset</h2>
-<p>
-If not already present, use the provided script to download PTB-XL into the <code>data/</code> folder:
-</p>
-<pre><code>python src/download_ptbxl.py
-</code></pre>
-<p>
-Ensure that the following files and folders exist in <code>data/</code>:
-</p>
-<ul>
-  <li><code>ptbxl_database.csv</code></li>
-  <li><code>scp_statements.csv</code></li>
-  <li><code>records100/</code></li>
-  <li><code>records500/</code></li>
-</ul>
-
-<h2>4. Run the Main Experiment Pipeline</h2>
-<p>
-The main script handles data loading, model training, and evaluation:
-</p>
-<pre><code>python src/main.py
-</code></pre>
-<p>
-This will:
-</p>
-<ul>
-  <li>Load and preprocess ECG data</li>
-  <li>Train the Standard Autoencoder (SAE)</li>
-  <li>Train the Variational Autoencoder (VAE)</li>
-  <li>Train the CNN classifier on:
-    <ul>
-      <li>Raw ECG</li>
-      <li>SAE latent features</li>
-      <li>VAE latent features</li>
-    </ul>
-  </li>
-  <li>Generate evaluation metrics and plots</li>
-</ul>
-
-<h2>5. Outputs Generated</h2>
-<p>
-After running <code>main.py</code>, you can find:
-</p>
-<ul>
-  <li>Confusion matrix figures in <code>results/Figure_2.png</code>, <code>Figure_3.png</code>, <code>Figure_4.png</code></li>
-  <li>Additional plots or comparisons in <code>results/Figure_1.png</code></li>
-</ul>
-
-<hr />
-
-<h1>🖼 Visual Outputs</h1>
-<p>The following visual outputs are generated and stored in the <code>results/</code> folder:</p>
-<ul>
-  <li><strong>Figure_1.png</strong> – Overall model comparison / summary visualization (e.g., accuracy or pipeline overview).</li>
-  <li><strong>Figure_2.png</strong> – Confusion matrix for the CNN trained on <strong>Raw ECG</strong>.</li>
-  <li><strong>Figure_3.png</strong> – Confusion matrix for the CNN trained on <strong>AE latent features</strong>.</li>
-  <li><strong>Figure_4.png</strong> – Confusion matrix for the CNN trained on <strong>VAE latent features</strong>.</li>
-</ul>
-
-<hr />
-
-
-<h2>Conclusion</h2>
-<ul>
-  <li>Raw ECG gave the best overall performance.</li>
-  <li>Standard Autoencoder saved time but achieved lower accuracy than raw ECG.</li>
-  <li>Both latent-feature models struggled to detect MI cases reliably.</li>
-  <li>Raw ECG signals preserved full morphology, giving clearly superior classification performance.</li>
-</ul>
-
-
-
-
+## Visualizations Generated
+- MAE masking strategy
+- MAE reconstruction quality
+- Accuracy comparison (all models)
+- Per-class F1 heatmap
+- Inference latency benchmarking
+- t-SNE latent space visualization
+- XAI gradient saliency maps
+- Precision & Recall heatmaps
+- AUC-ROC curves
+- Confusion matrices
