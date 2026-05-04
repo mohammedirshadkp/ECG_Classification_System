@@ -1,0 +1,9 @@
+Model,Mode,N_folds,Mean_Accuracy,Std,CI_95_low,CI_95_high,Mean_Latency_ms
+PCA + SVM,Efficient Scan,50,0.4238,0.0002,0.4238,0.4239,21.8
+SAE + SVM,Efficient Scan,50,0.5379,0.0079,0.5357,0.5402,20.7
+MAE + SVM,Efficient Scan,50,0.5467,0.0076,0.5445,0.5488,20.5
+MAE + XGBoost,Efficient Scan,50,0.531,0.0091,0.5285,0.5335,12.1
+SAE Fine-tuned,Pretrained FT,10,0.6416,0.0113,0.6346,0.6486,3008.0
+MAE Fine-tuned,Pretrained FT,10,0.656,0.009,0.6505,0.6616,2984.0
+Raw + BiLSTM,Full Analysis,10,0.6804,0.0194,0.6684,0.6924,4097.8
+Raw + 1D-CNN,Full Analysis,10,0.7265,0.0159,0.7166,0.7363,1597.6
