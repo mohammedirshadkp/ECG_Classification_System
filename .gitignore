@@ -25,3 +25,8 @@ Thumbs.db
 
 # Claude
 .claude/
+
+# Large binary model and data files (stored locally, not on GitHub)
+models/
+System_building_results/
+System_building.zip
