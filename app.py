@@ -91,15 +91,36 @@ DATA_DIR   = 'results'
 # too low to provide useful clinical guidance compared to the DL models (64–73%).
 
 TIER_MODELS = {
-    'End-to-End Deep Learning  (BiLSTM & 1D-CNN)':
-        ['Raw + BiLSTM', 'Raw + 1D-CNN'],
+    'Feature Extraction + Classifier  (ML Baselines)':
+        ['PCA + SVM', 'SAE + SVM', 'MAE + SVM', 'MAE + XGBoost'],
     'Pre-trained + Fine-tuned  (SAE & MAE)':
         ['SAE Fine-tuned', 'MAE Fine-tuned'],
-    'Compare All 4 Models':
-        ['SAE Fine-tuned', 'MAE Fine-tuned', 'Raw + BiLSTM', 'Raw + 1D-CNN'],
+    'End-to-End Deep Learning  (BiLSTM & 1D-CNN)':
+        ['Raw + BiLSTM', 'Raw + 1D-CNN'],
+    'Compare All 8 Models':
+        ['PCA + SVM', 'SAE + SVM', 'MAE + SVM', 'MAE + XGBoost',
+         'SAE Fine-tuned', 'MAE Fine-tuned', 'Raw + BiLSTM', 'Raw + 1D-CNN'],
 }
 
 TIER_INFO = {
+    'Feature Extraction + Classifier  (ML Baselines)': (
+        'First extracts a compressed **128-dimensional feature vector** from each ECG '
+        '(using PCA, Sparse Autoencoder, or Masked Autoencoder), then feeds those features '
+        'into a classical ML classifier.  \n\n'
+        'Two-stage pipeline: feature extraction → classification. These are the research '
+        'baselines — accuracy range **42–57%**. SVM finds the best separating hyperplane '
+        'in 128-dimensional feature space; XGBoost builds an ensemble of 100 decision trees. '
+        'Fastest inference — under 10 ms per ECG.  \n\n'
+        '⚠️ PCA + SVM requires the pre-processed test set (Mode A above). '
+        'SAE and MAE classifiers work with all input modes.'
+    ),
+    'Pre-trained + Fine-tuned  (SAE & MAE)': (
+        'The model first learns general ECG patterns without using any diagnosis labels '
+        '(unsupervised pre-training), then is further trained to classify the five heart '
+        'conditions specifically (fine-tuning).  \n\n'
+        'This is a transfer learning approach — the encoder builds general ECG knowledge '
+        'first, then specialises for the 5 conditions. About 3 seconds per ECG.'
+    ),
     'End-to-End Deep Learning  (BiLSTM & 1D-CNN)': (
         'The complete ECG waveform is fed **directly into a neural network** with no '
         'summarisation step. The network learns on its own which patterns matter.  \n\n'
@@ -109,19 +130,11 @@ TIER_INFO = {
         'compared — **BiLSTM** (sequential pattern reader) and **1D-CNN** (pattern detector). '
         'Takes about 2–4 seconds per ECG.'
     ),
-    'Pre-trained + Fine-tuned  (SAE & MAE)': (
-        'The model first learns general ECG patterns without using any diagnosis labels '
-        '(unsupervised pre-training), then is further trained to classify the five heart '
-        'conditions specifically (fine-tuning).  \n\n'
-        'This is a transfer learning approach — the encoder builds general ECG knowledge '
-        'first, then specialises for the 5 conditions. About 3 seconds per ECG.'
-    ),
-    'Compare All 4 Models': (
-        'Runs all 4 models at once and shows every result side by side. '
-        'The overall assessment is based on majority vote across models.  \n\n'
-        'These are the top-performing models from the full 8-model research experiment — '
-        'accuracy range **64% – 73%**. The complete 8-model comparison is shown in the '
-        'validation metrics section below.'
+    'Compare All 8 Models': (
+        'Runs all 8 models at once and shows every result side by side. '
+        'The overall assessment is based on majority vote across all models.  \n\n'
+        'Accuracy range: **42% (PCA+SVM baseline) → 73% (1D-CNN)**. '
+        'The complete breakdown is shown in the validation metrics section below.'
     ),
 }
 
@@ -405,8 +418,8 @@ def prob_bar(proba, pred):
 
 # ── Page setup ────────────────────────────────────────────────────────────────
 
-st.set_page_config(page_title='ECG Heart Analyzer', layout='wide', page_icon='🫀')
-st.title('🫀 ECG Heart Analyzer')
+st.set_page_config(page_title='Configurable ECG Classification System', layout='wide', page_icon='🫀')
+st.title('🫀 Configurable ECG Classification System')
 st.caption('Research tool  ·  PTB-XL Dataset  ·  VMU 2026  ·  Mohammed Irshad K P')
 
 st.info(
@@ -555,9 +568,9 @@ plt.close()
 st.divider()
 st.subheader('Step 3 — Choose Deployment Mode')
 st.caption(
-    'The 4 best-performing models from the thesis experiment are available for live prediction. '
-    'Full results for all 8 models (including the feature-extraction baselines) '
-    'are shown in the validation metrics section below.'
+    'All 8 models from the thesis experiment are available for live prediction. '
+    'Accuracy ranges from 42% (PCA+SVM baseline) to 73% (1D-CNN). '
+    'Full validation results are shown in the metrics section below.'
 )
 
 tier = st.radio('', list(TIER_MODELS.keys()), label_visibility='collapsed')
@@ -582,7 +595,7 @@ def can_run(mname):
 
 tier_pool = [m for m in TIER_MODELS[tier] if can_run(m)]
 
-if 'Compare All' in tier:
+if 'Compare All 8' in tier:
     selected = tier_pool
 else:
     st.markdown('**Select models to run:**')
@@ -728,14 +741,13 @@ with st.expander(
 with st.expander('📈 Research Validation Metrics — all 8 models tested', expanded=False):
 
     st.info(
-        '**These metrics cover all 8 models evaluated in the research experiment.**  \n'
-        'The live prediction interface shows only the 4 best-performing models (64–73% accuracy). '
-        'The 4 feature-extraction baselines (PCA/SAE/MAE + SVM/XGBoost, 42–55%) are included '
-        'here as proof of the comparative experiment but excluded from live predictions because '
-        'their accuracy is too low to provide reliable guidance.  \n\n'
+        '**All 8 models from the research experiment are available for live prediction.**  \n'
+        'The 4 ML baselines (PCA/SAE/MAE + SVM/XGBoost) use a two-stage pipeline: '
+        'feature extraction → classifier (42–57% accuracy). '
+        'The 4 deep learning models use end-to-end training (64–73% accuracy).  \n\n'
         'All metrics were computed on the full PTB-XL test set (4,286 recordings). '
-        'The **confidence %** on each prediction card is different — that is the '
-        'model\'s certainty about the specific ECG currently loaded.'
+        'The **confidence %** on each prediction card is the model\'s certainty about '
+        'the specific ECG currently loaded.'
     )
 
     # ── Metrics table ────────────────────────────────────────────────────────
@@ -838,19 +850,17 @@ with st.expander('📖 What do these heart conditions mean?'):
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
-ACTIVE_MODELS = ['SAE Fine-tuned', 'MAE Fine-tuned', 'Raw + BiLSTM', 'Raw + 1D-CNN']
-RESEARCH_MODELS = ['PCA + SVM', 'SAE + SVM', 'MAE + SVM', 'MAE + XGBoost']
+ALL_MODELS = [
+    'PCA + SVM', 'SAE + SVM', 'MAE + SVM', 'MAE + XGBoost',
+    'SAE Fine-tuned', 'MAE Fine-tuned', 'Raw + BiLSTM', 'Raw + 1D-CNN',
+]
 
 with st.sidebar:
     st.header('System Status')
-    st.caption('**Active models (live prediction)**')
-    for name in ACTIVE_MODELS:
+    st.caption('**Models loaded**')
+    for name in ALL_MODELS:
         icon = '✅' if name in models else '❌'
         st.caption(f'{icon} {name}')
-    st.divider()
-    st.caption('**Research baselines (metrics only)**')
-    for name in RESEARCH_MODELS:
-        st.caption(f'📊 {name}')
     st.divider()
     st.caption(f'Encoders loaded: {len(encoders)} / 2')
     for key in ('sae', 'mae'):

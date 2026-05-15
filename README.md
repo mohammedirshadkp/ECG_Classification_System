@@ -13,6 +13,8 @@
 
 This repository contains the full implementation of a configurable ECG classification framework built on the PTB-XL dataset. The system evaluates Masked Autoencoders (MAE) against Standard Autoencoders (SAE) and PCA as feature extraction methods, and compares Deep Learning classifiers (1D-CNN, BiLSTM) with conventional Machine Learning models (SVM, XGBoost) across three deployment tiers.
 
+A Streamlit web application provides an interactive demonstration of all 8 trained models running on live ECG data.
+
 **Core research question:** Can MAE pretraining produce superior ECG feature representations compared to SAE and PCA, and how do these representations perform when used with conventional ML classifiers versus end-to-end deep learning?
 
 ---
@@ -29,15 +31,18 @@ This repository contains the full implementation of a configurable ECG classific
 | Channels | 12 leads |
 | Classes | 5 diagnostic superclasses |
 
-**Class distribution:**
+**Actual class distribution (from loaded dataset after single-label assignment):**
 
-| Class | Description | Approx. % |
-|---|---|---|
-| NORM | Normal ECG | 40% |
-| MI | Myocardial Infarction | 20% |
-| STTC | ST/T-wave Change | 25% |
-| HYP | Hypertrophy | 5% |
-| CD | Conduction Disturbance | 15% |
+| Class | Description | Train N | Train % | Test N | Test % |
+|---|---|---|---|---|---|
+| NORM | Normal ECG | 7,266 | 42.4% | 1,817 | 42.4% |
+| MI | Myocardial Infarction | 2,183 | 12.7% | 546 | 12.7% |
+| STTC | ST/T-wave Change | 3,643 | 21.2% | 911 | 21.3% |
+| HYP | Hypertrophy | 431 | 2.5% | 107 | 2.5% |
+| CD | Conduction Disturbance | 3,621 | 21.1% | 905 | 21.1% |
+| **Total** | | **17,144** | | **4,286** | |
+
+HYP is the minority class at 2.5% — the primary class-imbalance challenge in this dataset.
 
 ---
 
@@ -45,11 +50,11 @@ This repository contains the full implementation of a configurable ECG classific
 
 The system is configurable for different clinical and deployment environments:
 
-| Tier | Mode | Models | Accuracy | Latency | Use Case |
+| Tier | Mode | Models | CV Accuracy | Latency | Use Case |
 |---|---|---|---|---|---|
-| 1 | Efficient Scan | PCA/SAE/MAE + SVM, XGBoost | 42–55% | 12–44 ms | Real-time triage, wearables, resource-constrained |
-| 2 | Pretrained FT | SAE/MAE Fine-tuned | 64–67% | ~3,000 ms | Balanced accuracy/speed, clinical support |
-| 3 | Full Analysis | Raw + BiLSTM, Raw + 1D-CNN | 70–74% | 1,500–4,100 ms | Hospital-grade diagnostic accuracy |
+| 1 | Efficient Scan | PCA/SAE/MAE + SVM, XGBoost | 42–55% | 12–22 ms | Real-time triage, resource-constrained |
+| 2 | Pretrained FT | SAE/MAE Fine-tuned | 64–66% | ~3,000 ms | Balanced accuracy/speed, clinical support |
+| 3 | Full Analysis | Raw + BiLSTM, Raw + 1D-CNN | 68–73% | 1,598–4,098 ms | Hospital-grade diagnostic accuracy |
 
 ---
 
@@ -80,9 +85,11 @@ The system is configurable for different clinical and deployment environments:
 ### SAE — Standard Autoencoder (Baseline)
 
 - Identical Transformer encoder architecture as MAE
-- Reconstructs full unmasked signal (no masking)
-- Same training settings for fair comparison
+- Reconstructs full unmasked signal (no masking, no sparsity constraint)
+- Same training settings for fair architectural comparison
 - **Output:** 128-dimensional feature vector per ECG
+
+> Note: "SAE" here refers to the standard (non-masked) autoencoder baseline, not a sparse autoencoder with L1 penalty. Both SAE and MAE share the same Transformer encoder — the only difference is the self-supervised training objective.
 
 ### PCA — Principal Component Analysis (Lower-Bound Baseline)
 
@@ -126,8 +133,8 @@ Output: (batch, 128)
 
 | Model | Configuration |
 |---|---|
-| SAE Fine-tuned | Pretrained Transformer encoder + Dense(64, name=clf_dense) + Dropout(0.3) + Softmax(5), Adam lr=1e-4 |
-| MAE Fine-tuned | Pretrained Transformer encoder + Dense(64, name=clf_dense) + Dropout(0.3) + Softmax(5), Adam lr=1e-4 |
+| SAE Fine-tuned | Pretrained Transformer encoder + Dense(64, relu) + Dropout(0.3) + Softmax(5), Adam lr=1e-4 |
+| MAE Fine-tuned | Pretrained Transformer encoder + Dense(64, relu) + Dropout(0.3) + Softmax(5), Adam lr=1e-4 |
 
 All encoder layers unfrozen for full end-to-end fine-tuning.
 
@@ -187,39 +194,40 @@ Class weights recomputed per fold from fold training labels. `tf.keras.backend.c
 | Raw + BiLSTM | Full Analysis | 10 | 68.04% | 1.94% | 66.84% | 69.24% | 4,098 ms |
 | Raw + 1D-CNN | Full Analysis | 10 | **72.65%** | 1.59% | 71.66% | 73.63% | 1,598 ms |
 
-### Final Test Set Performance (4,286 test records)
+### Final Test Set Performance (4,286 held-out records)
 
-| Model | Test Acc | Precision | Recall | Macro F1 |
+| Model | Test Acc | F1-Macro | Precision (macro) | Recall (macro) |
 |---|---|---|---|---|
-| PCA + SVM | 42.4% | 0.085 | 0.200 | 0.119 |
-| SAE + SVM | 53.9% | 0.384 | 0.330 | 0.315 |
-| MAE + SVM | 54.8% | 0.381 | 0.343 | 0.325 |
-| MAE + XGBoost | 54.4% | 0.422 | 0.397 | 0.400 |
-| SAE Fine-tuned | 66.3% | 0.552 | 0.564 | 0.552 |
-| MAE Fine-tuned | 67.3% | 0.562 | 0.574 | 0.563 |
-| Raw + BiLSTM | 69.8% | 0.602 | 0.665 | 0.611 |
-| Raw + 1D-CNN | **74.2%** | **0.641** | **0.672** | **0.644** |
+| PCA + SVM | 42.39% | 0.119 | 0.085 | 0.200 |
+| SAE + SVM | 57.40% | 0.350 | 0.417 | 0.366 |
+| MAE + SVM | 57.49% | 0.350 | 0.424 | 0.366 |
+| MAE + XGBoost | 55.13% | 0.404 | 0.429 | 0.400 |
+| SAE Fine-tuned | 62.62% | 0.523 | 0.535 | 0.581 |
+| MAE Fine-tuned | 61.41% | 0.512 | 0.535 | 0.575 |
+| Raw + BiLSTM | 65.21% | 0.557 | 0.567 | 0.635 |
+| Raw + 1D-CNN | **66.05%** | **0.568** | **0.582** | **0.650** |
 
 ### Per-Class F1 Score (Final Test Set)
 
 | Model | NORM | MI | STTC | HYP | CD |
 |---|---|---|---|---|---|
-| PCA + SVM | 0.60 | 0.00 | 0.00 | 0.00 | 0.00 |
-| SAE + SVM | 0.70 | 0.06 | 0.39 | 0.00 | 0.42 |
-| MAE + SVM | 0.72 | 0.05 | 0.44 | 0.00 | 0.42 |
-| MAE + XGBoost | 0.71 | 0.28 | 0.48 | 0.07 | 0.45 |
-| SAE Fine-tuned | 0.80 | 0.41 | 0.65 | 0.27 | 0.63 |
-| MAE Fine-tuned | 0.82 | 0.42 | 0.65 | 0.29 | 0.64 |
-| Raw + BiLSTM | 0.81 | 0.54 | 0.69 | 0.33 | 0.70 |
-| Raw + 1D-CNN | **0.85** | **0.56** | **0.71** | **0.37** | **0.73** |
+| PCA + SVM | 0.595 | 0.000 | 0.000 | 0.000 | 0.000 |
+| SAE + SVM | 0.723 | 0.058 | 0.494 | 0.000 | 0.473 |
+| MAE + SVM | 0.735 | 0.068 | 0.459 | 0.000 | 0.487 |
+| MAE + XGBoost | 0.723 | 0.249 | 0.474 | 0.089 | 0.488 |
+| SAE Fine-tuned | 0.835 | 0.428 | 0.521 | 0.278 | 0.553 |
+| MAE Fine-tuned | 0.824 | 0.421 | 0.504 | 0.265 | 0.546 |
+| Raw + BiLSTM | 0.838 | 0.518 | 0.530 | 0.288 | 0.610 |
+| Raw + 1D-CNN | **0.845** | **0.539** | **0.532** | **0.292** | **0.633** |
 
 ### Key Findings
 
-- **MAE outperforms SAE** in every category: +0.88% CV accuracy (SVM tier), +1.44% CV (Fine-tuned tier), +1.0% test accuracy
-- **PCA is the lower bound** — predicts only the NORM majority class, confirming raw signal flattening (12,000 dims) produces unusable features
-- **SVM cannot detect HYP** — F1=0.00 for all SVM variants; minority class too sparse for linear classifiers on fixed features
-- **Fine-tuned transformers detect all classes** — HYP F1=0.29 (MAE Fine-tuned) vs 0.00 (SVM), end-to-end training with class weights enables minority class detection
-- **Efficiency trade-off** — MAE+SVM at 20.5 ms vs Raw+CNN at 1,598 ms: 77× faster with 19.5% accuracy cost
+- **1D-CNN achieves the best overall performance** — 72.65% CV accuracy and 66.05% test accuracy with the fastest DL inference at 1,598 ms
+- **PCA is the lower bound** — predicts only the NORM majority class (F1=0 for all other classes), confirming that linear compression of the 12,000-dim raw signal destroys discriminative features
+- **SVM cannot detect HYP** — F1=0.00 for all three SVM variants; the 2.5% minority class cannot be separated using fixed 128-dim features with a linear classifier
+- **End-to-end training enables minority class detection** — HYP F1 jumps from 0.00 (SVM) to 0.09 (XGBoost) to 0.28–0.29 (fine-tuned DL) to 0.29 (raw DL)
+- **MAE outperforms SAE in CV** — +1.44% CV accuracy at fine-tuned tier (65.60% vs 64.16%); however this ordering reverses on the held-out test set (SAE: 62.62%, MAE: 61.41%), a reversal consistent with estimation variance given only 10 DL CV folds
+- **Efficiency trade-off** — MAE+SVM at 20.5 ms vs 1D-CNN at 1,598 ms: 78× faster with 18% accuracy cost (CV basis)
 
 ---
 
@@ -257,8 +265,30 @@ Gradient-based saliency maps implemented using `tf.GradientTape` on the final 1D
 
 - Gradients of predicted class score computed with respect to raw ECG input
 - Saliency = mean absolute gradient across all 12 channels, normalized to [0,1]
-- Validated on a correctly classified MI sample (confidence displayed)
+- Validated on a correctly classified MI sample — 1D-CNN confidence: **99.2%**
 - High-attention regions align with clinically relevant ECG features (QRS complexes, ST-segment)
+
+---
+
+## Streamlit Demo Application
+
+An interactive web application (`app.py`) allows live ECG classification using all 8 trained models.
+
+**Features:**
+- Two ECG input modes: pre-processed test set (4,286 samples) or raw PTB-XL dataset (21,430 records via `wfdb`)
+- Four configurable deployment modes matching the research tiers: ML Baselines, Pre-trained + Fine-tuned, End-to-End DL, Compare All 8
+- Real-time inference with per-model confidence, probability bar charts, and majority-vote consensus
+- German-to-English translation of PTB-XL doctor's reports (`deep_translator`)
+- Full validation metrics: CV results table, F1 heatmap, confusion matrices, ROC curves, precision/recall heatmaps
+
+**To run locally:**
+
+```bash
+pip install -r requirements_app.txt
+streamlit run app.py
+```
+
+Requires `models/` (trained model files) and `results/` (test arrays and figures) — not included in this repository due to file size. See `.gitignore`.
 
 ---
 
@@ -266,11 +296,10 @@ Gradient-based saliency maps implemented using `tf.GradientTape` on the final 1D
 
 | File | Description |
 |---|---|
-| `rp4-notebook4.ipynb` | Complete pipeline (25 cells, c01–c25) |
-| `cv_results_summary.csv` | Full CV results with 95% confidence intervals |
+| `cv_results_summary.csv` | Full CV results with 95% confidence intervals — authoritative numbers |
 | `dunn_posthoc.csv` | Dunn post-hoc pairwise p-values (Bonferroni corrected) |
 
-### Visualizations (generated during Kaggle run)
+### Visualizations
 
 | File | Description |
 |---|---|
@@ -281,7 +310,7 @@ Gradient-based saliency maps implemented using `tf.GradientTape` on the final 1D
 | `outputs_f1_heatmap.png` | Per-class F1 heatmap (8 models × 5 classes) |
 | `outputs_latency.png` | Inference latency comparison across models |
 | `outputs_tsne.png` | t-SNE latent space — SAE vs MAE side by side |
-| `outputs_saliency.png` | XAI gradient saliency on correctly classified MI sample |
+| `outputs_saliency.png` | XAI gradient saliency on correctly classified MI sample (confidence: 99.2%) |
 | `outputs_precision_recall.png` | Per-class precision and recall heatmaps |
 | `outputs_roc.png` | AUC-ROC curves for all 8 models |
 | `outputs_confusion.png` | Confusion matrices for all 8 models |
@@ -291,15 +320,29 @@ Gradient-based saliency maps implemented using `tf.GradientTape` on the final 1D
 
 ## How to Run
 
-### On Kaggle (recommended — GPU required)
+### Streamlit App (local — no GPU required)
 
-1. Upload `rp4-notebook4.ipynb` to a new Kaggle notebook
+```bash
+pip install -r requirements_app.txt
+streamlit run app.py
+```
+
+### Experiment Notebook (Kaggle — GPU recommended)
+
+1. Upload `Configurable ECG Classification System.ipynb` to a new Kaggle notebook
 2. Add PTB-XL dataset: search `khyeh0719/ptb-xl-dataset` in Data sources
 3. Enable **GPU T4 x1** under Session options
 4. Click **Save & Run All (Commit)**
 5. Estimated runtime: ~2.5 hours on T4 GPU
 
-### Dependencies
+### Utility Scripts
+
+| Script | Purpose |
+|---|---|
+| `fix_ml_models.py` | Retrains the 4 ML classifiers using local encoders and X_train — fixes feature alignment |
+| `regen_figures.py` | Regenerates the 4 test-set figures (confusion, F1, precision/recall, ROC) from current saved models |
+
+### Dependencies (experiment notebook)
 
 ```
 tensorflow >= 2.12
@@ -320,10 +363,10 @@ numpy
 ## Limitations
 
 1. **Unequal CV measurements** — ML: 50 folds, DL: 10 folds. May affect Dunn test accuracy for cross-tier comparisons.
-2. **HYP class difficulty** — Best model achieves F1=0.37 for HYP (5% of data). Class imbalance persists despite balanced weighting.
+2. **HYP class difficulty** — Best model achieves F1=0.29 for HYP (2.5% of data). Class imbalance persists despite balanced weighting.
 3. **Single dataset** — Only PTB-XL evaluated. Generalizability to other ECG datasets not tested.
 4. **Small Transformer** — 2 blocks, 4 heads, embed_dim=64. Larger models may further improve MAE advantage but exceeded Kaggle T4 compute budget.
-5. **MAE vs SAE not statistically significant** — Consistent numerical superiority of MAE observed but Bonferroni-corrected Dunn test shows p=1.0 between MAE Fine-tuned and SAE Fine-tuned. 10 DL folds limits statistical power.
+5. **MAE vs SAE not statistically significant** — Consistent numerical superiority of MAE in CV, but Bonferroni-corrected Dunn test shows p=1.0 between MAE Fine-tuned and SAE Fine-tuned. 10 DL folds limits statistical power.
 6. **CPU/RAM not profiled** — Only inference latency measured. Full resource profiling was not implemented.
 
 ---
@@ -331,11 +374,30 @@ numpy
 ## Repository Structure
 
 ```
-RP4_ECG_Classification/
-├── rp4-notebook4.ipynb       # Main pipeline notebook (cells c01-c25)
-├── cv_results_summary.csv    # Cross-validation results with 95% CI
-├── dunn_posthoc.csv          # Dunn post-hoc statistical results
-└── README.md                 # This file
+RP4_ECG_CLASSIFICATION/
+├── app.py                                        # Streamlit demo application (all 8 models)
+├── Configurable ECG Classification System.ipynb  # Full experiment pipeline (cells c01-c25)
+├── requirements_app.txt                          # Python dependencies for the Streamlit app
+├── fix_ml_models.py                              # Utility: retrain ML classifiers locally
+├── regen_figures.py                              # Utility: regenerate 4 test-set figures
+├── README.md                                     # This file
+├── models/                                       # Trained model files (not in repo — too large)
+│   ├── model_bilstm.keras
+│   ├── model_cnn.keras
+│   ├── model_sae_finetuned.keras
+│   ├── model_mae_finetuned.keras
+│   ├── model_pca_svm.pkl
+│   ├── model_sae_svm.pkl
+│   ├── model_mae_svm.pkl
+│   └── model_mae_xgboost.pkl
+└── results/                                      # Test arrays, CSVs, figures (not in repo — too large)
+    ├── X_test.npy / X_train.npy
+    ├── y_test.npy / y_train.npy
+    ├── X_test_pca.npy / X_test_sae.npy / X_test_mae.npy
+    ├── encoder_sae.keras / encoder_mae.keras
+    ├── cv_results_summary.csv
+    ├── dunn_posthoc.csv
+    └── outputs_*.png
 ```
 
 ---
