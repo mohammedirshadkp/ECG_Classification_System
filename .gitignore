@@ -23,7 +23,7 @@ rp4-notebook3.ipynb
 .DS_Store
 Thumbs.db
 
-# Claude
+# Local config
 .claude/
 
 # Large binary model and data files (stored locally, not on GitHub)
