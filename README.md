@@ -2,10 +2,20 @@
 ### A Comparative Study of Deep Learning and Conventional Machine Learning Approaches
 
 **Author:** Mohammed Irshad Kunnam Puthoor  
-**Programme:** MSc Applied Informatics  
+**Programme:** Applied Informatics  
 **University:** Vytautas Magnus University (VMU), Lithuania  
 **Supervisor:** Prof. Ausra Saudargiene  
 **Year:** 2026
+
+---
+
+## Live Demo
+
+An interactive demonstration of all 8 trained models running on live ECG data from the PTB-XL dataset is available here:
+
+**[https://huggingface.co/spaces/irshad51712/ECG_classification](https://huggingface.co/spaces/irshad51712/ECG_classification)**
+
+The demo allows selecting any ECG recording from the full PTB-XL dataset (21,837 records) and running one or all models for live classification.
 
 ---
 
